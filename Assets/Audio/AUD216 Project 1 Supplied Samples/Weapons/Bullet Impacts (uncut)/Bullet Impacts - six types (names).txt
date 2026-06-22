@@ -1,0 +1,8 @@
+Bullet Impacts in order on the audiofile:
+
+1. Bullets, Impact, Body/Flesh
+2. Bullets, Impact, Dirt
+3. Bullets, Impact, Wood
+4. Bullets, Impact, Rock
+5. Bullets, Impact, Water
+6. Bullets, Impact, Metal
