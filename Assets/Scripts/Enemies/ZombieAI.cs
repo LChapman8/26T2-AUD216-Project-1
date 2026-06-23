@@ -233,16 +233,16 @@ public class ZombieAI : MonoBehaviour, IDamageable
             isAttacking = true;
             isPositionLocked = true;
             lastAttackTime = Time.time;
-            
+
             // Set attack parameters
             animator.SetTrigger("Attack");
             animator.SetBool("IsAttacking", true);
-            
+
             if (attackAudioSource != null)
             {
                 StartCoroutine(PlayDelayedAttackSound());
             }
-            
+
             StartCoroutine(AttackSequence());
         }
     }
@@ -273,13 +273,13 @@ public class ZombieAI : MonoBehaviour, IDamageable
             }
 
             // Wait until damage point in animation
-            if (animator.GetCurrentAnimatorStateInfo(0).IsName("Attack") && 
+            if (animator.GetCurrentAnimatorStateInfo(0).IsName("Attack") &&
                 animator.GetCurrentAnimatorStateInfo(0).normalizedTime >= 0.5f &&
                 Time.time >= lastAttackTime + attackCooldown)
             {
                 DealDamage();
                 lastAttackTime = Time.time;
-                
+
                 // Wait until near end of current attack
                 while (animator.GetCurrentAnimatorStateInfo(0).normalizedTime < 0.9f)
                 {
@@ -359,10 +359,10 @@ public class ZombieAI : MonoBehaviour, IDamageable
     public void TakeDamage(float damage)
     {
         if (isDying) return;
-        
+
         currentHealth = Mathf.Max(0, currentHealth - damage);
         UpdateHealthUI();
-        
+
         if (currentHealth <= 0 && !isDying)
         {
             Die();
@@ -373,10 +373,15 @@ public class ZombieAI : MonoBehaviour, IDamageable
     {
         isDying = true;
         isAttacking = false;
-        
+
+        if (zombieManager != null)
+        {
+            zombieManager.UnregisterZombie(gameObject);
+        }
+
         // Notify any listeners
         OnZombieDeath?.Invoke();
-        
+
         // Stop movement and disable collider
         if (agent != null) agent.isStopped = true;
         if (GetComponent<Collider>() != null)
@@ -388,7 +393,7 @@ public class ZombieAI : MonoBehaviour, IDamageable
 
         // Play death animation and sound
         animator.SetBool("IsDying", true);
-        
+
         // Start coroutine to handle death sequence
         StartCoroutine(DeathSequence());
         StartCoroutine(FadeOutAudio());
@@ -406,25 +411,25 @@ public class ZombieAI : MonoBehaviour, IDamageable
         {
             yield return null;
         }
-        
+
         // Wait for death animation to complete
         while (animator.GetCurrentAnimatorStateInfo(0).normalizedTime < 0.95f)
         {
             yield return null;
         }
-        
+
         // Pause animation
         animator.speed = 0;
-        
+
         // Wait before starting sink animation
         yield return new WaitForSeconds(4f);
-        
+
         // Sink into ground
         float sinkDuration = 1.5f;
         float elapsedTime = 0f;
         Vector3 startPos = transform.position;
         Vector3 endPos = startPos - new Vector3(0, 2f, 0); // Sink 2 units down
-        
+
         while (elapsedTime < sinkDuration)
         {
             elapsedTime += Time.deltaTime;
@@ -432,7 +437,7 @@ public class ZombieAI : MonoBehaviour, IDamageable
             transform.position = Vector3.Lerp(startPos, endPos, t);
             yield return null;
         }
-        
+
         // Destroy the game object
         Destroy(gameObject);
     }
@@ -487,8 +492,7 @@ public class ZombieAI : MonoBehaviour, IDamageable
 
     private void OnDestroy()
     {
-        // Ensure zombie is unregistered if destroyed without dying animation
-        if (zombieManager != null && !isDying)
+        if (zombieManager != null)
         {
             zombieManager.UnregisterZombie(gameObject);
         }
