@@ -8,13 +8,13 @@ public class PlayerStats : MonoBehaviour, IDamageable
     [Header("Hunger Settings")]
     [SerializeField] private Slider hungerBar;
     [SerializeField] private float maxHunger = 100f;
-    [SerializeField] private float hungerDecreaseRate = 1.667f; // Will take 60 seconds to go from 100 to 0
-    
+    [SerializeField] private float hungerDecreaseRate = 1.667f;
+    [SerializeField] private float lowHungerThreshold = 25f;
+
     [Header("Health Settings")]
     [SerializeField] private Slider healthBar;
     [SerializeField] private float maxHealth = 100f;
-    [SerializeField] private float damageAmount = 10f;  // Amount of damage when debug key is pressed
-    [Tooltip("Key used to test damage in play mode")]
+    [SerializeField] private float damageAmount = 10f;
     [SerializeField] private KeyCode debugDamageKey = KeyCode.P;
 
     [Header("Stamina Settings")]
@@ -31,11 +31,8 @@ public class PlayerStats : MonoBehaviour, IDamageable
     [SerializeField] private Animator damageAnimator;
     [SerializeField] private string damageAnimationTrigger = "damageAnimationTrigger";
     [SerializeField] private GameObject damageEffectRoot;
-    [Tooltip("Vignette effect for damage and low health indication")]
     [SerializeField] private Animator vignetteAnimator;
-    [Tooltip("Health threshold for triggering hit effects (default 50)")]
     [SerializeField] private float midHealthThreshold = 50f;
-    [Tooltip("Health threshold to activate constant vignette effect (default 25)")]
     [SerializeField] private float lowHealthThreshold = 25f;
 
     [Header("XP Settings")]
@@ -69,20 +66,24 @@ public class PlayerStats : MonoBehaviour, IDamageable
     private int currentLevel = 1;
     private float xpToNextLevel;
     private bool isDead = false;
+
     private bool isLowHealthEffectActive = false;
+    private bool isLowHungerAudioActive = false;
+    private bool wasStaminaEmpty = false;
+    private bool wasStaminaRegenerating = false;
+
     private static readonly int ActiveParameter = Animator.StringToHash("Active");
     private static readonly int HitParameter = Animator.StringToHash("Hit");
 
     private float lastHungerUpdate = 0f;
-    private float hungerUpdateInterval = 0.1f; // Update hunger every 100ms instead of every frame
+    private float hungerUpdateInterval = 0.1f;
     private float lastStaminaUpdate = 0f;
-    private float staminaUpdateInterval = 0.05f; // Update stamina every 50ms
-    
+    private float staminaUpdateInterval = 0.05f;
+
     private Rigidbody playerRigidbody;
 
     private void Awake()
     {
-        // Ensure vignette starts inactive
         if (vignetteAnimator != null)
         {
             vignetteAnimator.SetBool(ActiveParameter, false);
@@ -96,8 +97,7 @@ public class PlayerStats : MonoBehaviour, IDamageable
         InitializeUI();
         InitializeXPSystem();
         UpdateLowHealthEffect();
-        
-        // Cache component reference
+
         playerRigidbody = GetComponent<Rigidbody>();
     }
 
@@ -115,7 +115,7 @@ public class PlayerStats : MonoBehaviour, IDamageable
             hungerBar.maxValue = maxHunger;
             hungerBar.value = currentHunger;
         }
-        
+
         if (healthBar != null)
         {
             healthBar.maxValue = maxHealth;
@@ -138,7 +138,7 @@ public class PlayerStats : MonoBehaviour, IDamageable
     {
         currentXp = 0f;
         xpToNextLevel = baseXpToLevelUp;
-        
+
         if (xpBar != null)
         {
             xpBar.maxValue = xpToNextLevel;
@@ -154,27 +154,23 @@ public class PlayerStats : MonoBehaviour, IDamageable
 
         float currentTime = Time.time;
 
-        // Update hunger at intervals instead of every frame
         if (currentTime >= lastHungerUpdate + hungerUpdateInterval)
         {
             HandleHunger();
             lastHungerUpdate = currentTime;
         }
 
-        // Update stamina at intervals instead of every frame
         if (currentTime >= lastStaminaUpdate + staminaUpdateInterval)
         {
             HandleStamina();
             lastStaminaUpdate = currentTime;
         }
 
-        // Check health/hunger death condition less frequently
         if (currentHealth <= 0 || currentHunger <= 0)
         {
             Die();
         }
 
-        // Keep debug input check
         if (Input.GetKeyDown(debugDamageKey))
         {
             TakeDamage(damageAmount);
@@ -187,17 +183,34 @@ public class PlayerStats : MonoBehaviour, IDamageable
 
         currentHunger -= hungerDecreaseRate * hungerUpdateInterval;
         currentHunger = Mathf.Max(0, currentHunger);
-        
+
         if (hungerBar != null)
         {
             hungerBar.value = currentHunger;
+        }
+
+        bool isLowHunger = currentHunger <= lowHungerThreshold;
+
+        if (isLowHunger && !isLowHungerAudioActive)
+        {
+            if (playerAudioManager != null)
+            {
+                playerAudioManager.PlayHungerSound();
+            }
+
+            isLowHungerAudioActive = true;
+        }
+        else if (!isLowHunger)
+        {
+            isLowHungerAudioActive = false;
         }
     }
 
     private void HandleStamina()
     {
+        float previousStamina = currentStamina;
         float staminaChange;
-        
+
         if (isSprinting)
         {
             staminaChange = -sprintStaminaCostPerSecond * staminaUpdateInterval;
@@ -208,15 +221,40 @@ public class PlayerStats : MonoBehaviour, IDamageable
         }
         else
         {
-            return; // No change needed
+            wasStaminaRegenerating = false;
+            return;
         }
 
         currentStamina = Mathf.Clamp(currentStamina + staminaChange, 0, maxStamina);
-        
+
         if (staminaBar != null)
         {
             staminaBar.value = currentStamina;
         }
+
+        bool isStaminaEmpty = currentStamina <= 0f;
+
+        if (isStaminaEmpty && !wasStaminaEmpty)
+        {
+            if (playerAudioManager != null)
+            {
+                playerAudioManager.PlayStaminaDepletedSound();
+            }
+        }
+
+        wasStaminaEmpty = isStaminaEmpty;
+
+        bool isRegenerating = !isSprinting && currentStamina > previousStamina && currentStamina < maxStamina;
+
+        if (isRegenerating && !wasStaminaRegenerating)
+        {
+            if (playerAudioManager != null)
+            {
+                playerAudioManager.PlayStaminaRegeneratingSound();
+            }
+        }
+
+        wasStaminaRegenerating = isRegenerating;
     }
 
     private void Die()
@@ -233,47 +271,38 @@ public class PlayerStats : MonoBehaviour, IDamageable
     private void ShowDeathEffects()
     {
         if (damageEffectRoot != null)
-        {
             damageEffectRoot.SetActive(true);
-        }
 
         if (damageParticles != null)
-        {
             damageParticles.Play();
-        }
 
         if (damageAnimator != null)
-        {
             damageAnimator.SetTrigger(damageAnimationTrigger);
-        }
     }
 
     private void DisablePlayerControls()
     {
         MonoBehaviour[] scripts = GetComponents<MonoBehaviour>();
+
         foreach (MonoBehaviour script in scripts)
         {
             if (script != this)
-            {
                 script.enabled = false;
-            }
         }
 
         if (playerRigidbody != null)
-        {
             playerRigidbody.isKinematic = true;
-        }
     }
 
     private IEnumerator QuitGameSequence()
     {
         yield return new WaitForSeconds(deathDelay);
 
-        #if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-        #else
-            Application.Quit();
-        #endif
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
     }
 
     public void TakeDamage(float amount)
@@ -281,23 +310,18 @@ public class PlayerStats : MonoBehaviour, IDamageable
         if (isDead) return;
 
         currentHealth = Mathf.Max(0, currentHealth - amount);
+
         if (healthBar != null)
-        {
             healthBar.value = currentHealth;
-        }
 
         if (playerAudioManager != null)
-        {
             playerAudioManager.PlayDamageSound();
-        }
 
-        UpdateLowHealthEffect();  // Update low health state first
-        ShowDamageEffects();     // Then show hit effects
+        UpdateLowHealthEffect();
+        ShowDamageEffects();
 
         if (currentHealth <= 0)
-        {
             Die();
-        }
     }
 
     private void ShowDamageEffects()
@@ -309,42 +333,32 @@ public class PlayerStats : MonoBehaviour, IDamageable
         }
 
         if (damageParticles != null)
-        {
             damageParticles.Play();
-        }
 
         if (damageAnimator != null)
-        {
             damageAnimator.SetTrigger(damageAnimationTrigger);
-        }
 
-        // Only trigger hit effect when health is below midHealthThreshold
         if (vignetteAnimator != null && currentHealth <= midHealthThreshold)
-        {
             vignetteAnimator.SetTrigger(HitParameter);
-//            Debug.Log($"Triggering hit effect at {currentHealth:F1} health (below mid threshold of {midHealthThreshold})");
-        }
     }
 
     private IEnumerator HideDamageEffect()
     {
         yield return new WaitForSeconds(0.5f);
-        
+
         if (damageEffectRoot != null)
-        {
             damageEffectRoot.SetActive(false);
-        }
     }
 
     public void AddXP(float amount)
     {
         if (isDead) return;
-        
+
         bool isFirstXP = currentXp <= 0;
         currentXp += amount;
-        
+
         ShowXPGainAnimation(amount);
-        
+
         while (currentXp >= xpToNextLevel)
         {
             float excess = currentXp - xpToNextLevel;
@@ -353,14 +367,10 @@ public class PlayerStats : MonoBehaviour, IDamageable
         }
 
         if (xpBar != null)
-        {
             xpBar.value = currentXp;
-        }
 
         if (isFirstXP)
-        {
             UpdateLevelText();
-        }
     }
 
     private void ShowXPGainAnimation(float amount)
@@ -368,6 +378,7 @@ public class PlayerStats : MonoBehaviour, IDamageable
         if (xpGainAnimatorPrefab == null) return;
 
         Transform parent = xpGainParent != null ? xpGainParent : targetCanvas?.transform;
+
         if (parent == null)
         {
             targetCanvas = FindFirstObjectByType<Canvas>();
@@ -376,25 +387,19 @@ public class PlayerStats : MonoBehaviour, IDamageable
         }
 
         GameObject xpGainInstance = Instantiate(xpGainAnimatorPrefab, parent);
-        
-        // Set XP text
+
         Transform xpGainTextTransform = xpGainInstance.transform.Find(xpGainTextPath);
         if (xpGainTextTransform != null)
         {
             if (xpGainTextTransform.TryGetComponent<TextMeshProUGUI>(out var xpGainText))
-            {
                 xpGainText.text = $"+{amount} XP";
-            }
         }
 
-        // Play animation
         if (xpGainInstance.TryGetComponent<Animator>(out var animator))
         {
             int layerIndex = animator.GetLayerIndex("Base Layer");
             if (layerIndex != -1 && animator.HasState(layerIndex, Animator.StringToHash("ANIM_HUD_Event_XPGain_In")))
-            {
                 animator.Play("ANIM_HUD_Event_XPGain_In", layerIndex);
-            }
         }
 
         Destroy(xpGainInstance, xpGainAnimationDuration);
@@ -404,11 +409,9 @@ public class PlayerStats : MonoBehaviour, IDamageable
     {
         currentLevel++;
         xpToNextLevel *= xpScalingFactor;
-        
+
         if (xpBar != null)
-        {
             xpBar.maxValue = xpToNextLevel;
-        }
 
         UpdateLevelText();
         ShowLevelUpAnimation();
@@ -419,30 +422,22 @@ public class PlayerStats : MonoBehaviour, IDamageable
         if (levelUpAnimatorPrefab == null || targetCanvas == null) return;
 
         GameObject levelUpInstance = Instantiate(levelUpAnimatorPrefab, targetCanvas.transform);
-        
-        if (levelUpInstance.TryGetComponent<RectTransform>(out var rectTransform))
-        {
-            rectTransform.localScale = Vector3.one;
-        }
 
-        // Set level text
+        if (levelUpInstance.TryGetComponent<RectTransform>(out var rectTransform))
+            rectTransform.localScale = Vector3.one;
+
         Transform levelTextTransform = levelUpInstance.transform.Find(levelNumberTextPath);
         if (levelTextTransform != null)
         {
             if (levelTextTransform.TryGetComponent<TextMeshProUGUI>(out var levelNumberText))
-            {
                 levelNumberText.text = currentLevel.ToString();
-            }
         }
 
-        // Play animation
         if (levelUpInstance.TryGetComponent<Animator>(out var animator))
         {
             int layerIndex = animator.GetLayerIndex("Base Layer");
             if (layerIndex != -1 && animator.HasState(layerIndex, Animator.StringToHash("ANIM_HUD_Event_LevelUp_In")))
-            {
                 animator.Play("ANIM_HUD_Event_LevelUp_In", layerIndex);
-            }
         }
 
         Destroy(levelUpInstance, 5f);
@@ -451,37 +446,38 @@ public class PlayerStats : MonoBehaviour, IDamageable
     private void UpdateLevelText()
     {
         if (levelText != null)
-        {
             levelText.text = currentXp <= 0 ? "XP" : currentLevel.ToString();
-        }
     }
 
-    // Public methods for external access
     public void AddHealth(float amount)
     {
         if (isDead) return;
+
         currentHealth = Mathf.Min(currentHealth + amount, maxHealth);
+
         if (healthBar != null)
-        {
             healthBar.value = currentHealth;
-        }
-        
+
         if (UIAudioManager.Instance != null)
-        {
             UIAudioManager.Instance.PlayMedicineUsedSound();
-        }
-        
+
         UpdateLowHealthEffect();
     }
 
     public void AddHunger(float amount)
     {
         if (isDead) return;
+
         currentHunger = Mathf.Min(currentHunger + amount, maxHunger);
+
         if (hungerBar != null)
-        {
             hungerBar.value = currentHunger;
-        }
+
+        if (playerAudioManager != null)
+            playerAudioManager.PlayEatingSound();
+
+        if (currentHunger > lowHungerThreshold)
+            isLowHungerAudioActive = false;
     }
 
     public bool CanUseSpecialMove(float staminaCost)
@@ -495,12 +491,14 @@ public class PlayerStats : MonoBehaviour, IDamageable
         if (CanUseSpecialMove(staminaCostDoubleJump))
         {
             currentStamina -= staminaCostDoubleJump;
+            currentStamina = Mathf.Max(0, currentStamina);
+
             if (staminaBar != null)
-            {
                 staminaBar.value = currentStamina;
-            }
+
             return true;
         }
+
         return false;
     }
 
@@ -509,12 +507,14 @@ public class PlayerStats : MonoBehaviour, IDamageable
         if (CanUseSpecialMove(staminaCostSlide))
         {
             currentStamina -= staminaCostSlide;
+            currentStamina = Mathf.Max(0, currentStamina);
+
             if (staminaBar != null)
-            {
                 staminaBar.value = currentStamina;
-            }
+
             return true;
         }
+
         return false;
     }
 
@@ -524,7 +524,6 @@ public class PlayerStats : MonoBehaviour, IDamageable
         isSprinting = sprinting;
     }
 
-    // Getter methods
     public float GetCurrentHunger() => currentHunger;
     public float GetCurrentHealth() => currentHealth;
     public bool HasStaminaForSprinting() => currentStamina > 0;
@@ -538,29 +537,23 @@ public class PlayerStats : MonoBehaviour, IDamageable
         if (vignetteAnimator == null) return;
 
         bool shouldBeLowHealth = currentHealth <= lowHealthThreshold;
-        
-        // Force update the state even if it hasn't changed
+
         isLowHealthEffectActive = shouldBeLowHealth;
         vignetteAnimator.SetBool(ActiveParameter, isLowHealthEffectActive);
 
         if (playerAudioManager != null)
-        {
             playerAudioManager.UpdateLowHealthState(isLowHealthEffectActive);
-        }
     }
 
     private void OnValidate()
     {
         if (lowHealthThreshold > midHealthThreshold)
-        {
-      //      Debug.LogWarning("Low health threshold should not be higher than mid health threshold. Adjusting...");
             lowHealthThreshold = midHealthThreshold;
-        }
-        
+
         if (midHealthThreshold > maxHealth)
-        {
-        //    Debug.LogWarning("Mid health threshold should not be higher than max health. Adjusting...");
             midHealthThreshold = maxHealth;
-        }
+
+        if (lowHungerThreshold > maxHunger)
+            lowHungerThreshold = maxHunger;
     }
 }
