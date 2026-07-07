@@ -71,6 +71,10 @@ public class PlayerStats : MonoBehaviour, IDamageable
     private bool isLowHungerAudioActive = false;
     private bool wasStaminaEmpty = false;
     private bool wasStaminaRegenerating = false;
+    private bool isStaminaLocked = false;
+
+    [Header("Stamina Exhaustion")]
+    [SerializeField] private float staminaUnlockPercent = 10f;
 
     private static readonly int ActiveParameter = Animator.StringToHash("Active");
     private static readonly int HitParameter = Animator.StringToHash("Hit");
@@ -234,12 +238,21 @@ public class PlayerStats : MonoBehaviour, IDamageable
 
         bool isStaminaEmpty = currentStamina <= 0f;
 
-        if (isStaminaEmpty && !wasStaminaEmpty)
+        if (isStaminaEmpty && !isStaminaLocked)
         {
+            isStaminaLocked = true;
+
             if (playerAudioManager != null)
             {
                 playerAudioManager.PlayStaminaDepletedSound();
             }
+        }
+
+        float unlockStaminaAmount = maxStamina * (staminaUnlockPercent / 100f);
+
+        if (isStaminaLocked && currentStamina >= unlockStaminaAmount)
+        {
+            isStaminaLocked = false;
         }
 
         wasStaminaEmpty = isStaminaEmpty;
@@ -482,6 +495,8 @@ public class PlayerStats : MonoBehaviour, IDamageable
 
     public bool CanUseSpecialMove(float staminaCost)
     {
+        if (isStaminaLocked) return false;
+
         float currentStaminaPercentage = (currentStamina / maxStamina) * 100f;
         return currentStaminaPercentage >= staminaRequiredForSpecialMoves && currentStamina >= staminaCost;
     }
@@ -526,7 +541,7 @@ public class PlayerStats : MonoBehaviour, IDamageable
 
     public float GetCurrentHunger() => currentHunger;
     public float GetCurrentHealth() => currentHealth;
-    public bool HasStaminaForSprinting() => currentStamina > 0;
+    public bool HasStaminaForSprinting() => !isStaminaLocked && currentStamina > 0;
     public int GetCurrentLevel() => currentLevel;
     public float GetCurrentXP() => currentXp;
     public float GetXPToNextLevel() => xpToNextLevel;

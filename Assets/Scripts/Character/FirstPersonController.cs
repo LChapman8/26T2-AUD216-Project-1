@@ -56,14 +56,14 @@ namespace UnityStandardAssets.Characters.FirstPerson
         [SerializeField] private bool m_IsWalking;                    // Current walking state
         [SerializeField] private float m_WalkSpeed;                   // Base walking speed
         [SerializeField] private float m_RunSpeed;                    // Base running speed
-        [SerializeField] [Range(0f, 1f)] private float m_RunstepLenghten;  // Step length modifier when running
+        [SerializeField][Range(0f, 1f)] private float m_RunstepLenghten;  // Step length modifier when running
         [SerializeField] private float m_JumpSpeed;                   // Initial jump velocity
         [SerializeField] private float m_StickToGroundForce;         // Force keeping player grounded
         [SerializeField] private float m_GravityMultiplier;          // Modifier for gravity strength
 
         [Header("Look Settings")]
         [SerializeField] private MouseLook m_MouseLook;              // Mouse look control system
-        
+
         [Header("Camera Effects")]
         [SerializeField] private bool m_UseFovKick;                  // Whether to use FOV effects
         [SerializeField] private FOVKick m_FovKick = new FOVKick();  // FOV kick effect parameters
@@ -390,19 +390,25 @@ namespace UnityStandardAssets.Characters.FirstPerson
             Rigidbody body = hit.collider.attachedRigidbody;
             if (m_CollisionFlags == CollisionFlags.Below) return;
             if (body == null || body.isKinematic) return;
-            
+
             body.AddForceAtPosition(m_CharacterController.velocity * 0.1f, hit.point, ForceMode.Impulse);
         }
 
         public void SelectInventorySlot(int slotIndex)
         {
             Item selectedItem = inventory.GetItem(slotIndex);
-            
+
             if (selectedItem == null)
             {
-                if (activeWeapon != null && activeWeapon.IsWeaponRaised())
+                if (activeWeapon != null)
                 {
-                    activeWeapon.ToggleWeaponPosition();
+                    activeWeapon.HideAmmoUI();
+
+                    if (activeWeapon.IsWeaponRaised())
+                    {
+                        activeWeapon.ToggleWeaponPosition();
+                    }
+
                     activeWeapon = null;
                 }
                 return;
@@ -415,16 +421,35 @@ namespace UnityStandardAssets.Characters.FirstPerson
             else if (selectedItem is FishingRodItem fishingRodItem)
             {
                 // Lower any raised weapon before using fishing rod
-                if (activeWeapon != null && activeWeapon.IsWeaponRaised())
+                if (activeWeapon != null)
                 {
-                    activeWeapon.ToggleWeaponPosition();
+                    activeWeapon.HideAmmoUI();
+
+                    if (activeWeapon.IsWeaponRaised())
+                    {
+                        activeWeapon.ToggleWeaponPosition();
+                    }
+
                     activeWeapon = null;
                 }
-                
+
                 fishingRodItem.UseItem();
             }
             else
             {
+                // Non-weapon items should hide weapon ammo UI.
+                if (activeWeapon != null)
+                {
+                    activeWeapon.HideAmmoUI();
+
+                    if (activeWeapon.IsWeaponRaised())
+                    {
+                        activeWeapon.ToggleWeaponPosition();
+                    }
+
+                    activeWeapon = null;
+                }
+
                 selectedItem.UseItem();
             }
         }
@@ -445,7 +470,7 @@ namespace UnityStandardAssets.Characters.FirstPerson
                         break;
                     }
                 }
-                
+
                 if (fishingRod != null)
                 {
                     fishingRod.ForceToLowered();
@@ -454,23 +479,37 @@ namespace UnityStandardAssets.Characters.FirstPerson
                 if (activeWeapon == weaponController)
                 {
                     weaponController.ToggleWeaponPosition();
-                    if (!weaponController.IsWeaponRaised())
+
+                    if (weaponController.IsWeaponRaised())
                     {
+                        weaponController.ShowAmmoUI();
+                    }
+                    else
+                    {
+                        weaponController.HideAmmoUI();
                         activeWeapon = null;
                     }
                 }
                 else
                 {
-                    if (activeWeapon != null && activeWeapon.IsWeaponRaised())
+                    if (activeWeapon != null)
                     {
-                        activeWeapon.ToggleWeaponPosition();
+                        activeWeapon.HideAmmoUI();
+
+                        if (activeWeapon.IsWeaponRaised())
+                        {
+                            activeWeapon.ToggleWeaponPosition();
+                        }
                     }
 
                     activeWeapon = weaponController;
+
                     if (!weaponController.IsWeaponRaised())
                     {
                         weaponController.ToggleWeaponPosition();
                     }
+
+                    activeWeapon.ShowAmmoUI();
                 }
             }
             else
@@ -491,7 +530,7 @@ namespace UnityStandardAssets.Characters.FirstPerson
         {
             isSliding = true;
             slideTimer = slideDuration;
-            
+
             slideDirection = transform.forward * m_Input.y + transform.right * m_Input.x;
             slideDirection.Normalize();
 
@@ -525,9 +564,9 @@ namespace UnityStandardAssets.Characters.FirstPerson
                 float speedMultiplier = slideTimer / slideDuration;
                 Vector3 slideMove = slideDirection * slideMovementSpeed * speedMultiplier;
                 slideMove.y = m_MoveDir.y;
-                
+
                 m_CollisionFlags = m_CharacterController.Move(slideMove * Time.fixedDeltaTime);
-                
+
                 slideTimer -= Time.fixedDeltaTime;
             }
             else

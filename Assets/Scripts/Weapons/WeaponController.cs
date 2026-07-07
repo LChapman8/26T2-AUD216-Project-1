@@ -106,6 +106,7 @@ public class WeaponController : MonoBehaviour
 
         currentAmmo = maxAmmo;
         UpdateAmmoUI();
+        HideAmmoUI();
 
         if (reloadAudioSource == null)
         {
@@ -201,7 +202,7 @@ public class WeaponController : MonoBehaviour
         if (playerCamera == null) return;
 
         float targetFOV = isAiming ? aimFOV : normalFOV;
-       
+
     }
 
     private Vector3 GetCurrentBaseWeaponPosition()
@@ -307,6 +308,14 @@ public class WeaponController : MonoBehaviour
     {
         if (ammoText == null) return;
 
+        if (!isWeaponRaised)
+        {
+            ammoText.gameObject.SetActive(false);
+            return;
+        }
+
+        ammoText.gameObject.SetActive(true);
+
         if (reloading)
         {
             ammoText.text = "Reloading...";
@@ -314,6 +323,24 @@ public class WeaponController : MonoBehaviour
         else
         {
             ammoText.text = currentAmmo + " / " + maxAmmo;
+        }
+    }
+
+    public void RefreshAmmoUI()
+    {
+        UpdateAmmoUI();
+    }
+
+    public void ShowAmmoUI()
+    {
+        UpdateAmmoUI();
+    }
+
+    public void HideAmmoUI()
+    {
+        if (ammoText != null)
+        {
+            ammoText.gameObject.SetActive(false);
         }
     }
 
@@ -368,6 +395,7 @@ public class WeaponController : MonoBehaviour
         if (!isWeaponRaised)
         {
             isAiming = false;
+            HideAmmoUI();
         }
 
         if (ShowsReticle)
@@ -379,6 +407,7 @@ public class WeaponController : MonoBehaviour
         {
             targetPosition = GetCurrentBaseWeaponPosition();
             targetRotation = GetCurrentBaseWeaponRotation();
+            ShowAmmoUI();
 
             if (weaponAudioManager != null)
                 weaponAudioManager.PlayWeaponRaiseSound(weaponName);
@@ -387,6 +416,7 @@ public class WeaponController : MonoBehaviour
         {
             targetPosition = raisedPosition + loweredPositionOffset;
             targetRotation = Quaternion.Euler(raisedRotation + loweredRotationOffset);
+            HideAmmoUI();
 
             if (weaponAudioManager != null)
                 weaponAudioManager.PlayWeaponLowerSound(weaponName);
@@ -405,6 +435,7 @@ public class WeaponController : MonoBehaviour
             transform.localRotation = Quaternion.Euler(raisedRotation + loweredRotationOffset);
             targetPosition = transform.localPosition;
             targetRotation = transform.localRotation;
+            HideAmmoUI();
         }
     }
 
