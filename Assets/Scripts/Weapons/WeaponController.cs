@@ -31,19 +31,15 @@ public class WeaponController : MonoBehaviour
     private int currentAmmo;
     private bool isReloading = false;
 
-    [Header("Aim Down Sights / Zoom")]
-    [SerializeField] private Camera playerCamera;
+    [Header("Aim Down Sights")]
     [SerializeField] private KeyCode aimKey = KeyCode.Mouse1;
     [SerializeField] private bool holdToAim = true;
     [SerializeField] private bool allowAimWhileReloading = false;
-    [SerializeField] private float aimFOV = 20f;
-    [SerializeField] private float aimZoomSpeed = 10f;
     [SerializeField] private Vector3 aimPosition = new Vector3(0f, -0.15f, 0.25f);
     [SerializeField] private Vector3 aimRotation = new Vector3(0f, 0f, 0f);
     [SerializeField][Range(0f, 1f)] private float aimBobMultiplier = 0.25f;
     [SerializeField][Range(0f, 1f)] private float aimRecoilMultiplier = 0.65f;
 
-    private float normalFOV;
     private bool isAiming = false;
 
     [Header("Weapon Bob")]
@@ -113,16 +109,6 @@ public class WeaponController : MonoBehaviour
             reloadAudioSource = GetComponent<AudioSource>();
         }
 
-        if (playerCamera == null)
-        {
-            playerCamera = Camera.main;
-        }
-
-        if (playerCamera != null)
-        {
-            normalFOV = playerCamera.fieldOfView;
-        }
-
         if (!isInitialized)
         {
             InitializeWeapon(false);
@@ -131,8 +117,6 @@ public class WeaponController : MonoBehaviour
 
     protected virtual void Update()
     {
-        HandleCameraZoom();
-
         if (Input.GetKeyDown(reloadKey))
         {
             TryReload();
@@ -195,14 +179,6 @@ public class WeaponController : MonoBehaviour
             targetPosition = GetCurrentBaseWeaponPosition();
             targetRotation = GetCurrentBaseWeaponRotation();
         }
-    }
-
-    private void HandleCameraZoom()
-    {
-        if (playerCamera == null) return;
-
-        float targetFOV = isAiming ? aimFOV : normalFOV;
-
     }
 
     private Vector3 GetCurrentBaseWeaponPosition()

@@ -24,20 +24,14 @@ public class MushroomTripTrigger : MonoBehaviour
     [SerializeField] private bool destroyMushroomAfterUse = true;
 
     [Header("Camera Effects")]
-    [SerializeField] private Camera playerCamera;
-
+    [SerializeField] private Transform tripCameraPivot;
     [SerializeField] private float swayAmount = 0.03f;
     [SerializeField] private float swaySpeed = 0.4f;
-
     [SerializeField] private float rollAmount = 1.5f;
     [SerializeField] private float rollSpeed = 0.2f;
 
-    [SerializeField] private float fovAmplitude = 2f;
-    [SerializeField] private float fovSpeed = 0.3f;
-
-    private Vector3 cameraStartPos;
-    private Quaternion cameraStartRot;
-    private float cameraStartFOV;
+    private Vector3 pivotStartPos;
+    private Quaternion pivotStartRot;
 
     private bool playerInRange;
     private bool isTripping;
@@ -49,11 +43,10 @@ public class MushroomTripTrigger : MonoBehaviour
 
         SetOverlayZ(normalOverlayZ);
 
-        if (playerCamera != null)
+        if (tripCameraPivot != null)
         {
-            cameraStartPos = playerCamera.transform.localPosition;
-            cameraStartRot = playerCamera.transform.localRotation;
-            cameraStartFOV = playerCamera.fieldOfView;
+            pivotStartPos = tripCameraPivot.localPosition;
+            pivotStartRot = tripCameraPivot.localRotation;
         }
     }
 
@@ -63,34 +56,40 @@ public class MushroomTripTrigger : MonoBehaviour
         {
             StartCoroutine(TripRoutine());
         }
+    }
 
-        if (isTripping && playerCamera != null)
+    private void LateUpdate()
+    {
+        // IMPORTANT:
+        // Only the mushroom currently being consumed controls the camera.
+        if (isTripping)
         {
-            float swayX =
-                Mathf.Sin(Time.time * swaySpeed) * swayAmount;
-
-            float swayY =
-                Mathf.Cos(Time.time * swaySpeed * 0.8f) * swayAmount;
-
-            playerCamera.transform.localPosition =
-                cameraStartPos + new Vector3(swayX, swayY, 0);
-
-            float roll =
-                Mathf.Sin(Time.time * rollSpeed) * rollAmount;
-
-            playerCamera.transform.localRotation =
-                cameraStartRot * Quaternion.Euler(0, 0, roll);
-
-            playerCamera.fieldOfView =
-                cameraStartFOV +
-                Mathf.Sin(Time.time * fovSpeed) * fovAmplitude;
+            ApplyTripCameraEffects();
         }
-        else if (playerCamera != null)
-        {
-            playerCamera.transform.localPosition = cameraStartPos;
-            playerCamera.transform.localRotation = cameraStartRot;
-            playerCamera.fieldOfView = cameraStartFOV;
-        }
+    }
+
+    private void ApplyTripCameraEffects()
+    {
+        if (tripCameraPivot == null) return;
+
+        float swayX = Mathf.Sin(Time.time * swaySpeed) * swayAmount;
+        float swayY = Mathf.Cos(Time.time * swaySpeed * 0.8f) * swayAmount;
+
+        tripCameraPivot.localPosition =
+            pivotStartPos + new Vector3(swayX, swayY, 0f);
+
+        float roll = Mathf.Sin(Time.time * rollSpeed) * rollAmount;
+
+        tripCameraPivot.localRotation =
+            pivotStartRot * Quaternion.Euler(0f, 0f, roll);
+    }
+
+    private void ResetTripCameraEffects()
+    {
+        if (tripCameraPivot == null) return;
+
+        tripCameraPivot.localPosition = pivotStartPos;
+        tripCameraPivot.localRotation = pivotStartRot;
     }
 
     private IEnumerator TripRoutine()
@@ -101,16 +100,17 @@ public class MushroomTripTrigger : MonoBehaviour
             promptText.gameObject.SetActive(false);
 
         mushroomSnapshot.TransitionTo(snapshotTransitionTime);
-
         SetOverlayZ(tripOverlayZ);
 
         yield return new WaitForSeconds(tripDuration);
 
         normalSnapshot.TransitionTo(snapshotTransitionTime);
-
         SetOverlayZ(normalOverlayZ);
 
         isTripping = false;
+
+        // Reset ONCE when the trip ends.
+        ResetTripCameraEffects();
 
         if (destroyMushroomAfterUse)
             Destroy(gameObject);
